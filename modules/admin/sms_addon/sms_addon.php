@@ -757,17 +757,19 @@
 		$row_customers    = @mysql_fetch_assoc($customers);
 		$totalRows_mod = @mysql_num_rows($mod);
 		
-		$sms_client = new SoapClient('http://www.novinpayamak.com/WebService/?wsdl', array('encoding'=>'UTF-8'));
-		$credit = $sms_client->CreditCheck(array('gateway_number' => $row_mod['username'], 'gateway_pass' => $row_mod['password']));
-		
-		if ($credit < 0)
+		$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
+		$credit = $sms_client->CheckCredit(array(
+			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
+		));
+
+		if ($credit->Status != 1000)
 		{
 			$error  = 1;
 			$credit_str = 'خطایی در ارتباط با درگاه رخ داده است. کد خطا: '. $credit;
 		}
 		else
 		{
-			$credit_str = 'اعتبار درگاه: ' . $credit . ' <b>تعداد مشترکين:</b> ' . $row_customers['count(id)'];
+			$credit_str = 'اعتبار درگاه: ' . $credit->Credit . ' <b>تعداد مشترکين:</b> ' . $row_customers['count(id)'];
 		}
 		
 		echo '<style>
@@ -959,7 +961,7 @@
 			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
 		));
 		
-		if ($credit->Status < 0)
+		if ($credit->Status != 1000)
 		{
 			$error  = 1;
 			$credit_str = 'خطایی در ارتباط با درگاه رخ داده است. کد خطا: '. $credit->Status;
