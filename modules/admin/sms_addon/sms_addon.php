@@ -9,15 +9,14 @@
 	{
 		function SendSMS($gateway, $message){
 			if(empty($message['flash'])) $message['flash'] = false;
-			$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
+		$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
 			return $sms_client->Send(array(
 				'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass']),
 				'Recipients' => array($message['numbers']),
 				'Message' => array($message['content']),
 				'Flash' => $message['flash']
 			));
-			
-		}
+	}
 	}
 
 	if (!function_exists('GetSQLValueString'))
@@ -185,7 +184,8 @@
 					$message['numbers'] = $row_tels['value'];
 					$message['content'] = $content . $row_mod['businessname'];
 
-					$response = SendSMS($gateway, $message);
+					$responseA = SendSMS($gateway, $message);
+					$response = $responseA->Status;
 					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_customers['id'] . '\', \'' . $row_tels['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $content . $row_mod['businessname']) . '\')');
 					continue;
 				}
@@ -761,7 +761,8 @@
 		$credit = $sms_client->CheckCredit(array(
 			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
 		));
-
+		
+		
 		if ($credit->Status != 1000)
 		{
 			$error  = 1;
@@ -771,6 +772,7 @@
 		{
 			$credit_str = 'اعتبار درگاه: ' . $credit->Credit . ' <b>تعداد مشترکين:</b> ' . $row_customers['count(id)'];
 		}
+
 		
 		echo '<style>
 			fieldset{
@@ -960,7 +962,7 @@
 		$credit = $sms_client->CheckCredit(array(
 			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
 		));
-		
+
 		if ($credit->Status != 1000)
 		{
 			$error  = 1;
