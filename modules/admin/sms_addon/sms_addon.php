@@ -960,7 +960,7 @@
 	{
 		$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
 		$credit = $sms_client->CheckCredit(array(
-			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
+			'Auth' => array('number' => $row_mod['username'],'pass' => $row_mod['password'])
 		));
 
 		if ($credit->Status != 1000)
