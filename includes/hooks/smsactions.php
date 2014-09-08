@@ -1,17 +1,135 @@
 <?php
-	function SendSMS($gateway, $message){
+	function SendS($gateway, $message)
+	{
+		
+		if(strlen($message['numbers']) == 10 )
+				$message['numbers'] = '0'.$message['numbers'];
 		if(empty($message['flash'])) $message['flash'] = false;
+		
 		$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
 			return $sms_client->Send(array(
 				'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass']),
 				'Recipients' => array($message['numbers']),
 				'Message' => array($message['content']),
 				'Flash' => $message['flash']
-			));
+			))->Status;
+		
 	}
+	
+	function client_add($vars) {
+		$mod = @mysql_query( 'SELECT * FROM mod_smsaddon5' );
+		$row_mod = @mysql_fetch_array( $mod );
+		
+		if ($mod) {
+			if ($row_mod['clientadd'] == 1) {
+				if($vars['firstname'] !=" " AND $vars['lastname']!=" " )
+				{
+					$tel             = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text')));
+					$row_tel         = @mysql_fetch_array($tel);
+					$report             = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['notificationfield'], 'text')));
+					$row_report         = @mysql_fetch_array($report);
+					if ($row_tel['id'] != '' && $row_report['id'] != '')
+					{
+						$show = mysql_query( "SELECT * FROM `tblcustomfieldsvalues` WHERE `fieldid`='".$row_tel['id']."' AND `relid`='".$vars['userid']."' " );
+						$item = mysql_fetch_array( $show );
+						$clientaddtxtclient = str_replace( '{firstname}', $vars['firstname'], $row_mod['clientaddtxtclient'] );
+						$clientaddtxtclient = str_replace( '{lastname}', $vars['lastname'], $clientaddtxtclient );
+						$gateway['number'] = $row_mod['number'];
+						$gateway['username'] = $row_mod['username'];
+						$gateway['pass'] = $row_mod['password'];
+						$message['numbers'] = $item['value'];
+						$message['content'] = $clientaddtxtclient . $row_mod['businessname'];
+						$response = SendS( $gateway, $message );
+						mysql_query( 'INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time(  ) . '\', \'' . $vars['userid'] . '\', \'' . $vars['phonenumber'] . ( '\', \'' . $response . '\', \'' ) . $clientaddtxtclient . $row_mod['businessname'] . '\')' );
+					}
+				}
+			}
 
+
+			if ($row_mod['clientaddadmin'] == 1) {
+				if($vars['firstname'] !=" " AND $vars['lastname']!=" " )
+				{
+			
+					$clientaddtxtadmin = str_replace( '{firstname}', $vars['firstname'], $row_mod['clientaddtxtadmin'] );
+					$clientaddtxtadmin = str_replace( '{lastname}', $vars['lastname'], $clientaddtxtadmin );
+					$gateway['number'] = $row_mod['number'];
+					$gateway['username'] = $row_mod['username'];
+					$gateway['pass'] = $row_mod['password'];
+					$message['numbers'] = $row_mod['adminmobile'];
+					$message['content'] = $clientaddtxtadmin;
+					$response = SendS( $gateway, $message );
+					mysql_query( 'INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time(  ) . '\', \'admin\', \'' . $row_mod['adminmobile'] . ( '\', \'' . $response . '\', \'' . $clientaddtxtadmin . '\')' ) );
+				}
+			}
+		}
+		
+		return true;
+	
+	}
+	
+	function invoice_paid($vars) {
+		$mod = @mysql_query( 'SELECT * FROM mod_smsaddon5' );
+		$row_mod = @mysql_fetch_array( $mod );
+		
+		if ($mod) {
+			if ($row_mod['payclient'] == 1) {
+				$tel             = @mysql_query(@sprintf('SELECT id FROM `tblcustomfields` WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text')));
+				$row_tel         = @mysql_fetch_array($tel);
+				if ($row_tel['id'] != '' )
+				{
+					
+					$show_invoice = mysql_query( "SELECT * FROM `tblinvoices` WHERE `id`='".$vars['invoiceid']."' " );
+					$item_invoice = mysql_fetch_array( $show_invoice );
+					
+					$show_client = mysql_query( "SELECT * FROM `tblclients` WHERE `id`='".$item_invoice['userid']."' " );
+					$item_client = mysql_fetch_array( $show_client );
+					
+					$show = mysql_query( "SELECT * FROM `tblcustomfieldsvalues` WHERE `fieldid`='".$row_tel['id']."' AND `relid`='".$item_invoice['userid']."' " );
+					$item = mysql_fetch_array( $show );
+					
+					$clientaddtxtclient = str_replace( '{invoiceid}', $vars['invoiceid'], $row_mod['clientpaytxtclient'] );
+					$clientaddtxtclient = str_replace( '{amount}', $item_invoice['total'], $clientaddtxtclient );
+					$clientaddtxtclient = str_replace( '{firstname}', $item_client['firstname'], $clientaddtxtclient );
+					$clientaddtxtclient = str_replace( '{lastname}', $item_client['lastname'], $clientaddtxtclient );
+					$gateway['number'] = $row_mod['number'];
+					$gateway['username'] = $row_mod['username'];
+					$gateway['pass'] = $row_mod['password'];
+					$message['numbers'] = $item['value'];
+					$message['content'] = $clientaddtxtclient . $row_mod['businessname'];
+					$response = SendS( $gateway, $message );
+					mysql_query( 'INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time(  ) . '\', \'' . $item_client['firstname'].$item_client['lastname'] . '\', \'' . $item['value'] . ( '\', \'' . $response . '\', \'' ) . $clientaddtxtclient . $row_mod['businessname'] . '\')' );
+				}
+			}
+
+
+			if ($row_mod['payadmin'] == 1) {
+			
+				$show_invoice = mysql_query( "SELECT * FROM `tblinvoices` WHERE `id`='".$vars['invoiceid']."' " );
+				$item_invoice = mysql_fetch_array( $show_invoice );
+					
+				$show_client = mysql_query( "SELECT * FROM `tblclients` WHERE `id`='".$item_invoice['userid']."' " );
+				$item_client = mysql_fetch_array( $show_client );
+				
+				$clientaddtxtadmin = str_replace( '{invoiceid}', $vars['invoiceid'], $row_mod['adminpaytxtclient'] );
+				$clientaddtxtadmin = str_replace( '{amount}', $item_invoice['total'], $clientaddtxtadmin );
+				$clientaddtxtadmin = str_replace( '{firstname}', $item_client['firstname'], $clientaddtxtadmin );
+				$clientaddtxtadmin = str_replace( '{lastname}', $item_client['lastname'], $clientaddtxtadmin );
+				$gateway['number'] = $row_mod['number'];
+				$gateway['username'] = $row_mod['username'];
+				$gateway['pass'] = $row_mod['password'];
+				$message['numbers'] = $row_mod['adminmobile'];
+				$message['content'] = $clientaddtxtadmin;
+				$response = SendS( $gateway, $message );
+				mysql_query( 'INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time(  ) . '\', \'admin\', \'' . $row_mod['adminmobile'] . ( '\', \'' . $response . '\', \'' . $clientaddtxtadmin . '\')' ) );
+			}
+		}
+		
+		return true;
+	
+	}
+	
 	function client_change_password($vars) {
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod){
 			if ($row_mod['changepass'] == 1)
@@ -25,14 +143,14 @@
 				$row_report       = @mysql_fetch_assoc($report);
 				if (($row_tel['id'] != '' && $row_report['id'] != ''))
 				{
-					$teli     = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_tel['id'] . '\' AND relid=\'' . $vars['userid'] . '\'');
-					$row_teli = @mysql_fetch_assoc($teli);
-					$reportal     = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $vars['userid'] . '\'');
+					$teli     = @mysql_query("SELECT * FROM `tblcustomfieldsvalues` WHERE `fieldid` ='".$row_tel['id']."' AND `relid` ='".$vars['userid']."' ");
+					$row_teli = @mysql_fetch_array($teli);
+					$reportal     = @mysql_query("SELECT * FROM `tblcustomfieldsvalues` WHERE `fieldid`='".$row_report['id']."' AND `relid` ='".$vars['userid']."' ");
 					$row_reportal = @mysql_fetch_assoc($reportal);
 					if ($row_teli['value'] == '')
 					{
 						
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
 						$error = 1;
 					}
 					if ($error != 1)
@@ -47,34 +165,36 @@
 						{
 							$error  = 1;
 							
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars[0] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars[0] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
 						}
 					}
 					if ($error != 1)
 					{
-						$gateway['number']  = $row_mod['username'];
-						$gateway['pass']    = $row_mod['password'];
-						$message['numbers'] = $row_tel['value'];
-						$message['content'] = $passwordchangetxt . $row_mod['businessname'];
+						$gatewa['username']  = $row_mod['username'];
+						$gatewa['pass']    = $row_mod['password'];
+						$gatewa['number']    = $row_mod['number'];
+						$messag['numbers'] = $row_teli['value'];
+						$messag['content'] = $passwordchangetxt . $row_mod['businessname'];
 
-						$responseA = SendSMS($gateway, $message);
-						$response = $responseA->Status;
+						$response = SendS($gatewa, $messag);
 
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_teli['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
 					}
 				}
 				else
 				{
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+					mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 				}
 			}
 		}
-		return true;
+			return true;
+		
 	}
+	
 	
 	function ticket_open($vars)
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -111,7 +231,7 @@
 						$row_reportal = @mysql_fetch_assoc($reportal);
 						if ($row_tel['value'] == '')
 						{
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
 							$error = 1;
 						}
 						if ($error != 1)
@@ -127,7 +247,7 @@
 								$error  = 1;
 								if ($row_mod['newticket'] == 1)
 								{
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
 								}
 							}
 						}
@@ -135,15 +255,15 @@
 						{
 							if ($error != 1)
 							{	
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
+								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $ticketopentxtclient;
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
+								$response = SendS($gateway, $message);
 								
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
 							}
 						}
 						if ($row_mod['newticketadmin'] == 1)
@@ -163,20 +283,20 @@
 							if ((($vars['priority'] == $ticketonstring1 || $vars['priority'] == $ticketonstring2) || $vars['priority'] == $ticketonstring3))
 							{
 								
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
+								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_mod['adminmobile'];
 								$message['content'] = $ticketopentxtadmin;
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtadmin) . '\')');
+								$response = SendS($gateway, $message);
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtadmin) . '\')');
 							}
 						}
 					}
 					else
 					{
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 					}
 				}
 			}
@@ -186,7 +306,7 @@
 	
 	function ticket_admin($vars)
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -218,7 +338,7 @@
 							$row_reportal = @mysql_fetch_assoc($reportal);
 							if ($row_tel['value'] == '')
 							{
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
 								$error = 1;
 							}
 							if ($error != 1)
@@ -232,24 +352,25 @@
 								if ($row_reportal['value'] == $row_mod['no_area'])
 								{
 									$error  = 1;
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
 								}
 							}
 							if ($error != 1)
 							{
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
+								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $ticketreplytext;
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
+								$response = SendS($gateway, $message);
+								
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytext) . '\')');
 							}
 						}
 						else
 						{
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_ticketal['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 						}
 					}
 				}
@@ -259,7 +380,7 @@
 	
 	function ticket_client($vars)
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -278,14 +399,15 @@
 				$ticketreplytextadmin = str_replace('{status}', $vars['status'], $ticketreplytextadmin);
 				$ticketreplytextadmin = str_replace('{clientname}', $user['firstname'] . ' ' . $user['lastname'], $ticketreplytextadmin);
 				
-				$gateway['number']  = $row_mod['username'];
+				$gateway['username']  = $row_mod['username'];
 				$gateway['pass']    = $row_mod['password'];
+				$gateway['number']    = $row_mod['number'];
 				$message['numbers'] = $row_mod['adminmobile'];
 				$message['content'] = $ticketreplytextadmin;
 
-				$responseA = SendSMS($gateway, $message);
-				$response = $responseA->Status;
-				mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytextadmin) . '\')');
+				$response = SendS($gateway, $message);
+				
+				mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytextadmin) . '\')');
 			}
 		}
 		return true;
@@ -295,7 +417,7 @@
 	{
 		if (($vars['InvoiceID'] != '' && $vars['InvoiceID'] != 0))
 		{
-			$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+			$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 			$row_mod = @mysql_fetch_assoc($mod);
 			if ($mod)
 			{
@@ -327,7 +449,7 @@
 						$row_reportal = @mysql_fetch_assoc($reportal);
 						if ($row_tel['value'] == '')
 						{
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
 							$error = 1;
 						}
 						if ($error != 1)
@@ -342,7 +464,7 @@
 								{
 								$error  = 1;
 								
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
 								}
 							}
 						if ($row_mod['orders'] == 1)
@@ -350,32 +472,34 @@
 							if ($error != 1)
 							{
 							
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
+								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $ordertextclient . $row_mod['businessname'];
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
+								$response = SendS($gateway, $message);
+								
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ordertextclient . $row_mod['businessname']) . '\')');
 							}
 						}
 						if ($row_mod['ordersadmin'] == 1)
 						{
 							
-							$gateway['number']  = $row_mod['username'];
+							$gateway['username']  = $row_mod['username'];
 							$gateway['pass']    = $row_mod['password'];
+							$gateway['number']    = $row_mod['number'];
 							$message['numbers'] = $row_mod['adminmobile'];
 							$message['content'] = $ordertextadmin . $row_mod['businessname'];
 
-							$responseA = SendSMS($gateway, $message);
-							$response = $responseA->Status;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ordertextadmin . $row_mod['businessname']) . '\')');
+							$response = SendS($gateway, $message);
+							
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ordertextadmin . $row_mod['businessname']) . '\')');
 						}
 					}
 					else
 					{
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 					}
 				}
 			}
@@ -385,7 +509,7 @@
 	
 	function after_create($vars)
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -406,7 +530,7 @@
 					$row_reportal = @mysql_fetch_assoc($reportal);
 					if ($row_tel['value'] == '')
 					{
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
 						$error = 1;
 					}
 					if ($error != 1)
@@ -420,24 +544,25 @@
 						if ($row_reportal['value'] == $row_mod['no_area'])
 						{
 							$error  = 1;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
 						}
 					}
 					if ($error != 1)
 					{
-						$gateway['number']  = $row_mod['username'];
+						$gateway['username']  = $row_mod['username'];
 						$gateway['pass']    = $row_mod['password'];
+						$gateway['number']    = $row_mod['number'];
 						$message['numbers'] = $row_tel['value'];
 						$message['content'] = $modulecreatetext . $row_mod['businessname'];
 
-						$responseA = SendSMS($gateway, $message);
-						$response = $responseA->Status;
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
+						$response = SendS($gateway, $message);
+						
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $modulecreatetext . $row_mod['businessname']) . '\')');
 					}
 				}
 				else
 				{
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+					mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 				}
 			}
 		}
@@ -446,7 +571,7 @@
 	
 	function after_suspend($vars)
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -467,7 +592,7 @@
 					if ($row_tel['value'] == '')
 					{
 						
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
 						$error = 1;
 					}
 					if ($error != 1)
@@ -481,24 +606,25 @@
 						if ($row_reportal['value'] == $row_mod['no_area'])
 						{
 							$error  = 1;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
+							mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
 						}
 					}
 					if ($error != 1)
 					{
-						$gateway['number']  = $row_mod['username'];
+						$gateway['username']  = $row_mod['username'];
 						$gateway['pass']    = $row_mod['password'];
+						$gateway['number']    = $row_mod['number'];
 						$message['numbers'] = $row_tel['value'];
 						$message['content'] = $modulesuspendtext . $row_mod['businessname'];
 
-						$responseA = SendSMS($gateway, $message);
-						$response = $responseA->Status;
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
+						$response = SendS($gateway, $message);
+						
+						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $modulesuspendtext . $row_mod['businessname']) . '\')');
 					}
 				}
 				else
 				{
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+					mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['params']['clientsdetails']['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 				}
 			}
 		}
@@ -507,7 +633,8 @@
 	
 	function daily_cron_job()
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($mod)
 		{
@@ -527,6 +654,7 @@
 				$row_tel               = @mysql_fetch_assoc(mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text'))));
 				$report                = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['notificationfield'], 'text')));
 				$row_report            = @mysql_fetch_assoc($report);
+
 				if ($row_tel['id'] != '' && $row_report['id'] != '')
 				{
 					if ($totalRows_bill > 0)
@@ -544,7 +672,7 @@
 							$row_reportal    = @mysql_fetch_assoc($reportal);
 							if ($tel['value'] == '')
 							{
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								$error = 1;
 							}
 							if ($error != 1)
@@ -558,19 +686,19 @@
 								if ($row_reportal['value'] == $row_mod['no_area'])
 								{
 									$error  = 1;
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								}
 							}
 							if ($error != 1)
 							{
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
-								$message['numbers'] = $row_tel['value'];
+								$gateway['number']    = $row_mod['number'];
+								$message['numbers'] = $tel['value'];
 								$message['content'] = $invoicetextclient . $row_mod['businessname'];
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+								$response = SendS($gateway, $message);
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 							}
 						}
 					}
@@ -593,7 +721,7 @@
 							$row_reportal    = @mysql_fetch_assoc($reportal);
 							if ($row_tel['value'] == '')
 							{
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								$error = 1;
 							}
 							if ($error != 1)
@@ -607,19 +735,19 @@
 								if ($row_reportal['value'] == $row_mod['no_area'])
 								{
 									$error  = 1;
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								}
 							}
 							if ($error != 1)
 							{
-								$gateway['number']  = $row_mod['username'];
+								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
+								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $invoicetextclient . $row_mod['businessname'];
 
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+								$response = SendS($gateway, $message);
+								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 							}
 						}
 					}
@@ -649,7 +777,7 @@
 								$row_reportal      = @mysql_fetch_assoc($reportal);
 								if ($tel['value'] == '')
 								{
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 									$error = 1;
 								}
 								if ($error != 1)
@@ -663,19 +791,20 @@
 									if ($row_reportal['value'] == $row_mod['no_area'])
 									{
 										$error  = 1;
-										mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+										mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 									}
 								}
 								if ($error != 1)
 								{
-									$gateway['number']  = $row_mod['username'];
+									$gateway['username']  = $row_mod['username'];
 									$gateway['pass']    = $row_mod['password'];
+									$gateway['number']    = $row_mod['number'];
 									$message['numbers'] = $tel['value'];
 									$message['content'] = $invoicetextclient . $row_mod['businessname'];
 
-									$responseA = SendSMS($gateway, $message);
-									$response = $responseA->Status;
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									$response = SendS($gateway, $message);
+									
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								}
 							}
 						}
@@ -683,6 +812,7 @@
 					
 					if ($row_mod['dueinvoice'] == 1)
 					{
+						
 						$begin                  = time();
 						$today2               = $begin - 86400;
 						$today3               = date('Y-m-d', $today2);
@@ -690,6 +820,7 @@
 						$totalRows_bill = @mysql_num_rows($bill);
 						if ($totalRows_bill > 0)
 						{
+							
 							while ($row_bill = mysql_fetch_assoc($bill))
 							{
 								$date            = explode('-', $row_bill['duedate']);
@@ -703,7 +834,7 @@
 								$row_reportal    = @mysql_fetch_assoc($reportal);
 								if ($tel['value'] == '')
 								{
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 									$error = 1;
 								}
 								if ($error != 1)
@@ -717,19 +848,19 @@
 									if ($row_reportal['value'] == $row_mod['no_area'])
 									{
 										$error  = 1;
-										mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+										mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 									}
 								}
 								if ($error != 1)
 								{
-									$gateway['number']  = $row_mod['username'];
+									$gateway['username']  = $row_mod['username'];
 									$gateway['pass']    = $row_mod['password'];
+									$gateway['number']    = $row_mod['number'];
 									$message['numbers'] = $tel['value'];
 									$message['content'] = $invoicetextclient . $row_mod['businessname'];
 
-									$responseA = SendSMS($gateway, $message);
-									$response = $responseA->Status;
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
+									$response = SendS($gateway, $message);
+									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								}
 							}
 						}
@@ -737,7 +868,7 @@
 				}
 				else
 				{
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
+					mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_invoice['userid'] . '\', \'\', \'Invalid module settings\', \'\')');
 				}
 			}
 		}
@@ -784,6 +915,8 @@
 			}
 	}
 	
+@add_hook('ClientAdd', 1, 'client_add', '' );
+@add_hook('InvoicePaid', 1, 'invoice_paid', '' );
 @add_hook('ClientChangePassword', 1, 'client_change_password', '');
 @add_hook('TicketOpen', 1, 'ticket_open', '');
 @add_hook('TicketAdminReply', 1, 'ticket_admin', '');

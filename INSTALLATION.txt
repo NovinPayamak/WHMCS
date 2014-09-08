@@ -1,5 +1,0 @@
-1. Upload files to your whmcs installation directory.
-2. Go to admin area->setup->custom client fields.
-3. Create a text box field(tick required field and tick show on order form), this field is for your clients' mobile phone. Field name example: Mobile Phone
-4. Create a dropdown field(tick required field and tick show on order form), type Yes,No without quotation marks into field options or type them in your own language. Field name example: Receive SMS notifications?
-5. Go to utilities->addon modules->sms addon, Enter all settings properly.

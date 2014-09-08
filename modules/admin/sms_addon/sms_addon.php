@@ -5,17 +5,26 @@
 		exit('This file cannot be accessed directly');
 	}
 
-	if (!function_exists('SendSMS'))
+	if (!function_exists('SendSM'))
 	{
-		function SendSMS($gateway, $message){
-			if(empty($message['flash'])) $message['flash'] = false;
-			$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
-			return $sms_client->Send(array(
-				'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass']),
-				'Recipients' => array($message['numbers']),
-				'Message' => array($message['content']),
-				'Flash' => $message['flash']
-			));
+		function SendSM($gateway, $message){
+			
+			if(strlen($message['numbers']) == 10 )
+				$message['numbers'] = '0'.$message['numbers'];
+				
+			$client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8'));
+			$flash = false;
+			$res = $client->Send(
+				array(
+					'Auth' 	=> array('number' => $gateway['number'],'pass' => $gateway['password']),
+					'Recipients' => array($message['numbers']),
+					'Message' => array($message['content']),
+					'Flash' => $flash
+					)
+				);
+			
+			return $res->Status;
+			
 			
 		}
 	}
@@ -62,13 +71,13 @@
 
 	if (isset($_GET['clearlog']))
 	{
-		mysql_query('TRUNCATE TABLE mod_smsaddon_logs');
+		mysql_query('TRUNCATE TABLE mod_smsaddon5_logs');
 		header('Location: addonmodules.php?module=sms_addon&logs');
 		exit();
 	}
 	if (isset($_GET['SendSingleSms']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		
 		if ($_POST['customer'] == 'none')
@@ -90,16 +99,16 @@
 		}
 		if ($error != 1)
 		{
-			$gateway['number']  = $row_mod['username'];
-			$gateway['pass']    = $row_mod['password'];
+			$gateway['username']  = $row_mod['username'];
+			$gateway['password']    = $row_mod['password'];
+			$gateway['number']    = $row_mod['number'];
 			$message['numbers'] = $recipient_number;
 			$message['content'] = $_POST['content'];
 
-			$responseA = SendSMS($gateway, $message);
-			$response = $responseA->Status;
+			$response = SendSM($gateway, $message);
 			$time     = time();
-			$_SESSION['error'] = 'ارسال با موفقيت انجام شد. پاسخ وب سرويس:<br />' . $response . '<br />';
-			mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . $time . '\', \'' . $customer . '\', \'' . $recipient_number . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $_POST['content']) . '\')');
+			$_SESSION['error'] = 'ارسال با موفقيت انجام شد.<br />';
+			mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . $time . '\', \'' . $customer . '\', \'' . $recipient_number . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $_POST['content']) . '\')');
 		}
 		header('Location: addonmodules.php?module=sms_addon&error');
 		exit();
@@ -107,17 +116,9 @@
 	
 	if (isset($_GET['SendMassSms']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 
-		if ((isset($_SESSION['page']) && $_SESSION['page'] != ''))
-		{
-			$page = $_SESSION['page'];
-		}
-		else
-		{
-			$page = 0;
-		}
 		if ((!isset($_POST['content']) || $_POST['content'] == ''))
 		{
 			$content = $_SESSION['content'];
@@ -136,95 +137,71 @@
 			header('Location: addonmodules.php?module=sms_addon&masssms');
 			exit();
 		}
-		$start                = $page * 15;
-		$querylimit           = ' LIMIT ' . $start . ',15';
-		$customers            = @mysql_query('SELECT id FROM tblclients' . $querylimit);
-		$all_customers        = @mysql_query('SELECT id FROM tblclients');
-		$pageNum_customers    = $page;
-		$totalRows_customers  = @mysql_num_rows($all_customers);
-		$totalPages_customers = ceil($totalRows_customers / 15) - 1;
-		$tel               = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text')));
-		$row_tel           = @mysql_fetch_assoc($tel);
-		$report               = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['notificationfield'], 'text')));
-		$row_report           = @mysql_fetch_assoc($report);
-		while ($row_customers = mysql_fetch_assoc($customers))
+		
+		$t = 0;
+		if($_SESSION['first'] > 0)
+			$page = $_SESSION['page'] - 0;
+		else
+			$page = 0;
+		$_SESSION['first'] ++;
+		$start                = $page * 20;
+		$querylimit           = ' LIMIT ' . $start . ',20';
+		
+		$tel             = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text')));
+		$row_tel         = @mysql_fetch_array($tel);
+		$report             = @mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['notificationfield'], 'text')));
+		$row_report         = @mysql_fetch_array($report);
+		if ($row_tel['id'] != '' && $row_report['id'] != '')
 		{
-			$error = 0;
-			if (($row_tel['id'] != '' && $row_report['id'] != ''))
+			$customers            = @mysql_query('SELECT id FROM tblclients' . $querylimit);
+			$all_customers        = @mysql_query('SELECT id FROM tblclients');
+			$total = mysql_num_rows($all_customers);
+						
+			while($item_user = mysql_fetch_array($customers))
 			{
-				$tels     = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_tel['id'] . '\' AND relid=\'' . $row_customers['id'] . '\'');
-				$row_tels = @mysql_fetch_assoc($tels);
-				$reports     = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_customers['id'] . '\'');
-				$row_reports = @mysql_fetch_assoc($reportal);
-				if ($row_tels['value'] == '')
+				$show = mysql_query( "SELECT * FROM `tblcustomfieldsvalues` WHERE `fieldid`='".$row_tel['id']."' AND `relid`='".$item_user['id']."' " );
+				$item = mysql_fetch_array( $show );
+				if($item['value'] > 0)
 				{
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_customers['id'] . '\', \'\', \'فاقد شماره موبايل\', \'\')');
-					$error = 1;
-				}
-				if ($error != 1)
-				{
-					$row_tels['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $row_tels['value']);
-					
-					if($row_tels['value'][0] != '0') $row_tels['value'] = '0'.$row_tels['value'];
-				}
-				if ($error != 1)
-				{
-					if ($force != 1)
-					{
-						if ($row_reportal['value'] == $row_mod['no_area'])
-						{
-							$error  = 1;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_customers['id'] . '\', \'' . $row_tels['value'] . '\', \'Client doesn\'t want to receive text messages\', \'\')');
-						}
-					}
-				}
-				if ($error != 1)
-				{
-					$gateway['number']  = $row_mod['username'];
-					$gateway['pass']    = $row_mod['password'];
-					$message['numbers'] = $row_tels['value'];
+					$gateway['password']    = $row_mod['password'];
+					$gateway['number']    = $row_mod['number'];
+					$message['numbers'] = $item['value'];
 					$message['content'] = $content . $row_mod['businessname'];
-
-					$response = SendSMS($gateway, $message);
-					mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_customers['id'] . '\', \'' . $row_tels['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $content . $row_mod['businessname']) . '\')');
-					continue;
+					$response = SendSM( $gateway, $message );
+					mysql_query("INSERT INTO `mod_smsaddon5_logs` (`time`,`client`,`mobilenumber`,`result`,`text`) VALUES('".time(  )."','".$item_user['id']."','".$item['value']."','".$response."','".$content . $row_mod['businessname']."')");
 				}
-			}
-			else
-			{
-				mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_customers['id'] . '\', \'\', \'Invalid module settings\', \'\')');
+				$t++;
 			}
 		}
-		if ($pageNum_customers < $totalPages_customers - 1)
+		
+		$_SESSION['page'] = $page + 1;
+		if($total == $t)
 		{
-			$_SESSION['page'] = $page + 1;
-			$_SESSION['error']  = $page + 1 . '/' . $totalPages_customers . ' completed. Sending will contiune in 15 seconds. <a href="addonmodules.php?module=sms_addon&SendMassSms">Contiune now</a><script>setTimeout("window.location=\'addonmodules.php?module=sms_addon&SendMassSms\'", 15000);</script><br />';
+			$_SESSION['masssmserror']= 'تمام پیامک ها ارسال شدند.';
+			$_SESSION['first'] = 0;
+			$_SESSION['page'] = 0;
 		}
 		else
-		{
-			$_SESSION['error']  = 'Successfully completed.';
-			$_SESSION['content'] = '';
-			$_SESSION['force'] == '';
-			$_SESSION['page'] == '';
-		}
-			header('Location: addonmodules.php?module=sms_addon&error');
-			exit();
+			$_SESSION['masssmserror'] = 'تعداد پیامک های ارسالی: ' .$t.'<br>برای ادامه ارسال بر روی دکمه ارسال کلیک نمایید.';
+		header('Location: addonmodules.php?module=sms_addon&masssms');
+		exit();
+		
 	}
 	if (isset($_GET['cleanup']))
 	{
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon`');
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon_codes`');
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon_logs`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5_codes`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5_logs`');
 		header('Location: addonmodules.php?module=sms_addon');
 		exit();
 	}
 	if (isset($_GET['next']))
 	{
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon`');
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon_codes`');
-		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon_logs`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5_codes`');
+		mysql_query('DROP TABLE IF EXISTS `mod_smsaddon5_logs`');
 
-		if (!(mysql_query('CREATE TABLE `mod_smsaddon` (
+		if (!(mysql_query('CREATE TABLE `mod_smsaddon5` (
 		  `id` bigint(255) NOT NULL auto_increment,
 		  `new_bill` tinyint(1) NOT NULL default \'0\',
 		  `changepass` tinyint(1) NOT NULL default \'0\',
@@ -234,54 +211,63 @@
 		  `ordersadmin` tinyint(1) NOT NULL default \'0\',
 		  `newticketadmin` tinyint(1) NOT NULL default \'0\',
 		  `ticketreplyadmin` tinyint(1) NOT NULL default \'0\',
+		  `clientadd` tinyint(1) NOT NULL default \'0\',
+		  `clientaddadmin` tinyint(1) NOT NULL default \'0\',
+		  `payclient` tinyint(1) NOT NULL default \'0\',
+		  `payadmin` tinyint(1) NOT NULL default \'0\',
 		  `adminmobile` longtext,
-		  `businessname` longtext,
-		  `sender` longtext,
-		  `mobilenumberfield` longtext,
-		  `notificationfield` longtext,
-		  `username` longtext,
-		  `password` longtext,
-		  `no_area` longtext,
+		  `businessname` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `sender` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `mobilenumberfield` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `notificationfield` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `username` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `password` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `number` longtext,
+		  `no_area` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  `senderforce` tinyint(1) NOT NULL default \'0\',
 		  `modulecreate` tinyint(1) NOT NULL default \'0\',
-		  `modulecreatetext` longtext,
-		  `passwordchangetxt` longtext,
-		  `ticketopentxtclient` longtext,
-		  `ticketopentxtadmin` longtext,
-		  `ticketreplytext` longtext,
-		  `ticketreplytextadmin` longtext,
-		  `ordertextclient` longtext,
-		  `ordertextadmin` longtext,
-		  `invoicetextclient` longtext,
+		  `modulecreatetext` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `passwordchangetxt` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `clientaddtxtclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `clientaddtxtadmin` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `clientpaytxtclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `adminpaytxtclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ticketopentxtclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ticketopentxtadmin` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ticketreplytext` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ticketreplytextadmin` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ordertextclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `ordertextadmin` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `invoicetextclient` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  `numbercorrection` tinyint(1) NOT NULL default \'0\',
-		  `countrycode` longtext,
-		  `leadingzeros` longtext,
+		  `countrycode` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `leadingzeros` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  `logsperpage` bigint(255) default \'50\',
 		  `domainxdays` bigint(255) default \'0\',
-		  `domainxdaystext` longtext,
+		  `domainxdaystext` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  `modulesuspend` tinyint(1) NOT NULL default \'0\',
-		  `modulesuspendtext` longtext,
+		  `modulesuspendtext` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  `dueinvoice` tinyint(1) NOT NULL default \'0\',
-		  `dueinvoicetext` longtext,
-		  `urgency1` longtext,
-		  `urgency2` longtext,
-		  `urgency3` longtext,
+		  `dueinvoicetext` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `urgency1` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `urgency2` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
+		  `urgency3` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		  PRIMARY KEY  (`id`)
 		) ENGINE=MyISAM')))
 		{
 		exit(mysql_error());
 		(bool) true;
 		}
-		mysql_query('CREATE TABLE `mod_smsaddon_logs` (
+		mysql_query('CREATE TABLE `mod_smsaddon5_logs` (
 		`id` bigint(255) NOT NULL auto_increment,
 		`time` longtext NOT NULL,
-		`client` longtext,
+		`client` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		`mobilenumber` longtext,
 		`result` longtext NOT NULL,
-		`text` longtext,
+		`text` longtext CHARACTER SET utf8 COLLATE utf8_persian_ci,
 		PRIMARY KEY (`id`)
 		) ENGINE=MyISAM');
-		if (!(mysql_query('INSERT INTO `mod_smsaddon` (`new_bill`, `changepass`, `orders`, `newticket`, `ticketreply`, `ordersadmin`, `newticketadmin`, `ticketreplyadmin`, `adminmobile`, `sender`, `mobilenumberfield`, `notificationfield`, `username`, `password`, `no_area`, `senderforce`, `modulecreate`, `modulecreatetext`, `passwordchangetxt`, `ticketopentxtclient`, `ticketopentxtadmin`, `ticketreplytext`, `ticketreplytextadmin`, `ordertextclient`, `ordertextadmin`, `invoicetextclient`, `numbercorrection`, `countrycode`, `leadingzeros`, `logsperpage`, `domainxdays`, `domainxdaystext`, `modulesuspend`, `modulesuspendtext`, `dueinvoice`, `dueinvoicetext`, `urgency1`, `urgency2`, `urgency3`) VALUES (0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, \'No\', 0, 0, \'سرويس {domain} فعال گرديده است. لطفا ايميل خود را چک کنيد.\', \'کلمه عبور شما به روزرسانی گرديد. آدرس ايميل شما: {emailaddress}. کلمه رمز: {password}.\', \'کاربر محترم {clientname} تيکت شما با عنوان {subject} دريافت گرديده و به زودی پاسخ داده شده و به روز رسانی می گردد.\', \'کاربر با نام {clientname} در شاخه {department} اقدام به بازکردن تيکت جديد با عنوان {subject} نموده است.\', \'تيکت با عنوان {subject} به روز رسانی گرديده است. لطفا جهت بررسی به حيطه کاربری خود وارد شويد.\', \'کاربر با نام {clientname} در شاخه {department} اقدام به ارسال پاسخ در تيکت با عنوان {subject} نموده است.\', \'کاربر گرامی از سفارش شما به ارزش {amount}  ریال سپاس گزاريم. تاريخ سررسيد سفارش {duedate}.\', \'سفارش جديد به ارزش {amount} به تاريخ سررسيد {duedate} ثبت گرديده است.\', \'صورت حساب جديدی با تاريخ سررسيد {duedate} و به ارزش {amount} برای شما ايجاد گرديده است.\', 0, NULL, NULL, 50, 0, \'{domain} طی {remainingdays} روز آينده منقضی ميگردد.\', 0, \'{domain} به وضعيت تعليق در آمده است. لطفا جهت رفع هرچه سريعتر مشکل با ما تماس بگيريد.\', 1, \'ُسفارش شما به ارزش {amount} در تاريخ {duedate} منقضی گرديد.\', \'1\', \'1\', \'1\');')))
+		if (!(mysql_query('INSERT INTO `mod_smsaddon5` (`new_bill`, `changepass`, `orders`, `newticket`, `ticketreply`, `ordersadmin`, `newticketadmin`, `ticketreplyadmin`, `adminmobile`, `sender`, `mobilenumberfield`, `notificationfield`, `username`, `password`, `no_area`, `senderforce`, `modulecreate`, `modulecreatetext`, `passwordchangetxt`, `ticketopentxtclient`, `ticketopentxtadmin`, `ticketreplytext`, `ticketreplytextadmin`, `ordertextclient`, `ordertextadmin`, `invoicetextclient`, `numbercorrection`, `countrycode`, `leadingzeros`, `logsperpage`, `domainxdays`, `domainxdaystext`, `modulesuspend`, `modulesuspendtext`, `dueinvoice`, `dueinvoicetext`, `urgency1`, `urgency2`, `urgency3`) VALUES (0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, \'No\', 0, 0, \'سرويس {domain} فعال گرديده است. لطفا ايميل خود را چک کنيد.\', \'کلمه عبور شما به روزرسانی گرديد. آدرس ايميل شما: {emailaddress}. کلمه رمز: {password}.\', \'کاربر محترم {clientname} تيکت شما با عنوان {subject} دريافت گرديده و به زودی پاسخ داده شده و به روز رسانی می گردد.\', \'کاربر با نام {clientname} در شاخه {department} اقدام به بازکردن تيکت جديد با عنوان {subject} نموده است.\', \'تيکت با عنوان {subject} به روز رسانی گرديده است. لطفا جهت بررسی به حيطه کاربری خود وارد شويد.\', \'کاربر با نام {clientname} در شاخه {department} اقدام به ارسال پاسخ در تيکت با عنوان {subject} نموده است.\', \'کاربر گرامی از سفارش شما به ارزش {amount}  ریال سپاس گزاريم. تاريخ سررسيد سفارش {duedate}.\', \'سفارش جديد به ارزش {amount} به تاريخ سررسيد {duedate} ثبت گرديده است.\', \'صورت حساب جديدی با تاريخ سررسيد {duedate} و به ارزش {amount} برای شما ايجاد گرديده است.\', 0, NULL, NULL, 50, 0, \'{domain} طی {remainingdays} روز آينده منقضی ميگردد.\', 0, \'{domain} به وضعيت تعليق در آمده است. لطفا جهت رفع هرچه سريعتر مشکل با ما تماس بگيريد.\', 1, \'ُسفارش شما به ارزش {amount} در تاريخ {duedate} منقضی گرديد.\', \'1\', \'1\', \'1\');')))
 		{
 			exit(mysql_error());
 			(bool) true;
@@ -293,7 +279,7 @@
 
 	if (isset($_GET['dosettings']))
 	{
-		mysql_query('UPDATE mod_smsaddon SET username=\'' . $_POST['username'] . '\', password=\'' . $_POST['password'] . '\', senderforce=\'' . $_POST['senderforce'] . '\'');
+		mysql_query('UPDATE mod_smsaddon5 SET username=\'' . $_POST['username'] . '\', password=\'' . $_POST['password'] . '\', number=\'' . $_POST['number'] . '\', senderforce=\'' . $_POST['senderforce'] . '\'');
 		if ($_POST['git'] == 'anamenu')
 		{
 			header('Location: addonmodules.php?module=sms_addon');
@@ -306,13 +292,13 @@
 	}
 	if (isset($_GET['mdosettings']))
 	{
-		mysql_query('UPDATE mod_smsaddon SET new_bill=\'' . $_POST['new_bill'] . '\', changepass=\'' . $_POST['changepass'] . '\', orders=\'' . $_POST['orders'] . '\', newticket=\'' . $_POST['newticket'] . '\', ticketreply=\'' . $_POST['ticketreply'] . '\', ordersadmin=\'' . $_POST['ordersadmin'] . '\', newticketadmin=\'' . $_POST['newticketadmin'] . '\', ticketreplyadmin=\'' . $_POST['ticketreplyadmin'] . '\', adminmobile=\'' . $_POST['adminmobile'] . '\', businessname=' . GetSQLValueString($_POST['businessname'], 'text') . ', mobilenumberfield=\'' . $_POST['mobilenumberfield'] . '\', notificationfield=' . GetSQLValueString($_POST['notificationfield'], 'text') . ', no_area=' . GetSQLValueString($_POST['no_area'], 'text') . ', modulecreate=\'' . $_POST['modulecreate'] . '\', modulecreatetext=' . GetSQLValueString($_POST['modulecreatetext'], 'text') . ', passwordchangetxt=' . GetSQLValueString($_POST['passwordchangetxt'], 'text') . ', ticketopentxtclient=' . GetSQLValueString($_POST['ticketopentxtclient'], 'text') . ', ticketopentxtadmin=' . GetSQLValueString($_POST['ticketopentxtadmin'], 'text') . ', ticketreplytext=' . GetSQLValueString($_POST['ticketreplytext'], 'text') . ', ticketreplytextadmin=' . GetSQLValueString($_POST['ticketreplytextadmin'], 'text') . ', ordertextclient=' . GetSQLValueString($_POST['ordertextclient'], 'text') . ', ordertextadmin=' . GetSQLValueString($_POST['ordertextadmin'], 'text') . ', invoicetextclient=' . GetSQLValueString($_POST['invoicetextclient'], 'text') . ', countrycode=' . GetSQLValueString($_POST['countrycode'], 'text') . ', logsperpage=\'' . $_POST['logsperpage'] . '\', domainxdays=\'' . $_POST['domainxdays'] . '\', domainxdaystext=' . GetSQLValueString($_POST['domainxdaystext'], 'text') . ', modulesuspend=\'' . $_POST['modulesuspend'] . '\', modulesuspendtext=' . GetSQLValueString($_POST['modulesuspendtext'], 'text') . ', dueinvoice=\'' . $_POST['dueinvoice'] . '\', dueinvoicetext=' . GetSQLValueString($_POST['dueinvoicetext'], 'text') . ', urgency1=\'' . $_POST['urgency1'] . '\', urgency2=\'' . $_POST['urgency2'] . '\', urgency3=\'' . $_POST['urgency3'] . '\'') or die(mysql_error());
+		mysql_query('UPDATE mod_smsaddon5 SET new_bill=\'' . $_POST['new_bill'] . '\', changepass=\'' . $_POST['changepass'] . '\', orders=\'' . $_POST['orders'] . '\', payclient=\'' . $_POST['payclient'] . '\', payadmin=\'' . $_POST['payadmin'] . '\', clientadd=\'' . $_POST['clientadd'] . '\', clientaddadmin=\'' . $_POST['clientaddadmin'] . '\', newticket=\'' . $_POST['newticket'] . '\', ticketreply=\'' . $_POST['ticketreply'] . '\', ordersadmin=\'' . $_POST['ordersadmin'] . '\', newticketadmin=\'' . $_POST['newticketadmin'] . '\', ticketreplyadmin=\'' . $_POST['ticketreplyadmin'] . '\', adminmobile=\'' . $_POST['adminmobile'] . '\', businessname=' . GetSQLValueString($_POST['businessname'], 'text') . ', mobilenumberfield=\'' . $_POST['mobilenumberfield'] . '\', notificationfield=' . GetSQLValueString($_POST['notificationfield'], 'text') . ', clientpaytxtclient=' . GetSQLValueString($_POST['clientpaytxtclient'], 'text') . ', adminpaytxtclient=' . GetSQLValueString($_POST['adminpaytxtclient'], 'text') . ', clientaddtxtclient=' . GetSQLValueString($_POST['clientaddtxtclient'], 'text') . ', clientaddtxtadmin=' . GetSQLValueString($_POST['clientaddtxtadmin'], 'text') . ', no_area=' . GetSQLValueString($_POST['no_area'], 'text') . ', modulecreate=\'' . $_POST['modulecreate'] . '\', modulecreatetext=' . GetSQLValueString($_POST['modulecreatetext'], 'text') . ', passwordchangetxt=' . GetSQLValueString($_POST['passwordchangetxt'], 'text') . ', ticketopentxtclient=' . GetSQLValueString($_POST['ticketopentxtclient'], 'text') . ', ticketopentxtadmin=' . GetSQLValueString($_POST['ticketopentxtadmin'], 'text') . ', ticketreplytext=' . GetSQLValueString($_POST['ticketreplytext'], 'text') . ', ticketreplytextadmin=' . GetSQLValueString($_POST['ticketreplytextadmin'], 'text') . ', ordertextclient=' . GetSQLValueString($_POST['ordertextclient'], 'text') . ', ordertextadmin=' . GetSQLValueString($_POST['ordertextadmin'], 'text') . ', invoicetextclient=' . GetSQLValueString($_POST['invoicetextclient'], 'text') . ', countrycode=' . GetSQLValueString($_POST['countrycode'], 'text') . ', logsperpage=\'' . $_POST['logsperpage'] . '\', domainxdays=\'' . $_POST['domainxdays'] . '\', domainxdaystext=' . GetSQLValueString($_POST['domainxdaystext'], 'text') . ', modulesuspend=\'' . $_POST['modulesuspend'] . '\', modulesuspendtext=' . GetSQLValueString($_POST['modulesuspendtext'], 'text') . ', dueinvoice=\'' . $_POST['dueinvoice'] . '\', dueinvoicetext=' . GetSQLValueString($_POST['dueinvoicetext'], 'text') . ', urgency1=\'' . $_POST['urgency1'] . '\', urgency2=\'' . $_POST['urgency2'] . '\', urgency3=\'' . $_POST['urgency3'] . '\'') or die(mysql_error());
 		header('Location: addonmodules.php?module=sms_addon');
 		exit();
 	}
 	if (isset($_GET['settings']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($row_mod['id'] > 0)
 		{
@@ -345,10 +331,10 @@
 					<fieldset>
 						<legend>تنظيمات درگاه</legend>
 					<table width=\'70%\' border=\'0\' id="Gateway" cellpadding="5" cellspacing="5">
-					<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>شماره درگاه:</td>
-					<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'text\' name=\'username\' value=\'' . $row_mod['username'] . '\'></td></tr>
-					<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>رمز درگاه:</td>
+					<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'> کلمه عبور:</td>
 					<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'password\' name=\'password\' value=\'' . $row_mod['password'] . '\'></td></tr>
+					<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>شماره ارسال :</td>
+					<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'text\' name=\'number\' value=\'' . $row_mod['number'] . '\'></td></tr>
 					<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>ارسال به عنوان Flash:</td>
 					<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'senderforce\' value=\'1\'';
 
@@ -383,7 +369,7 @@
 	
 	if (isset($_GET['modifysettings']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 		if ($row_mod['id'] > 0)
 		{
@@ -524,7 +510,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'invoicetextclient\' cols=\'70\' rows=\'1\'>' . $row_mod['invoicetextclient'] . '</textarea><br />Variables: {amount}, {duedate}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'invoicetextclient\' cols=\'70\' rows=\'1\'>' . $row_mod['invoicetextclient'] . '</textarea><br />متغیر ها: {amount}, {duedate}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان تغییر کلمه عبور:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'changepass\' value=\'1\'';
 			if ($row_mod['changepass'] == 1)
@@ -536,7 +522,41 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'passwordchangetxt\' cols=\'70\' rows=\'1\'>' . $row_mod['passwordchangetxt'] . '</textarea><br />Variables:{emailaddress}, {password}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'passwordchangetxt\' cols=\'70\' rows=\'1\'>' . $row_mod['passwordchangetxt'] . '</textarea><br />متغیر ها:{emailaddress}, {password}</td></tr>';
+			//start
+			
+			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان ثبت نام کاربر:</td>';
+			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'clientadd\' value=\'1\'';
+			if ($row_mod['clientadd'] == 1)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> فعال <input type=\'radio\' name=\'clientadd\' value=\'0\'';
+			if ($row_mod['clientadd'] == 0)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'clientaddtxtclient\' cols=\'70\' rows=\'1\'>' . $row_mod['clientaddtxtclient'] . '</textarea><br />متغیر ها:{firstname}, {lastname}</td></tr>';
+			
+			
+			//end
+			//start
+			
+			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان پرداخت فاکتور:</td>';
+			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'payclient\' value=\'1\'';
+			if ($row_mod['payclient'] == 1)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> فعال <input type=\'radio\' name=\'payclient\' value=\'0\'';
+			if ($row_mod['payclient'] == 0)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'clientpaytxtclient\' cols=\'70\' rows=\'1\'>' . $row_mod['clientpaytxtclient'] . '</textarea><br />متغیر ها:{firstname}, {lastname}, {invoiceid}, {amount}</td></tr>';
+			
+			
+			//end
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>هنگام ارسال سفارش جدید:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'orders\' value=\'1\'';
 			if ($row_mod['orders'] == 1)
@@ -548,7 +568,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ordertextclient\' cols=\'70\' rows=\'1\'>' . $row_mod['ordertextclient'] . '</textarea><br />Variables: {amount}, {duedate}, {orderid}, {ordernumber}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ordertextclient\' cols=\'70\' rows=\'1\'>' . $row_mod['ordertextclient'] . '</textarea><br />متغیر ها: {amount}, {duedate}, {orderid}, {ordernumber}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>هنگام ارسال تیکت پشتیبانی:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'newticket\' value=\'1\'';
 			if ($row_mod['newticket'] == 1)
@@ -560,7 +580,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ticketopentxtclient\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketopentxtclient'] . '</textarea><br />Variables:{ticketid}, {clientname}, {department}, {departmentid}, {subject}, {message}, {priority}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ticketopentxtclient\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketopentxtclient'] . '</textarea><br />متغیر ها:{ticketid}, {clientname}, {department}, {departmentid}, {subject}, {message}, {priority}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>هنگام پاسخ دادن به تیکت پشتیبانی:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'ticketreply\' value=\'1\'';
 			if ($row_mod['ticketreply'] == 1)
@@ -572,7 +592,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br />If enabled, client will be texted when admin replies to his/her support ticket.<br /><textarea dir=\'rtl\' name=\'ticketreplytext\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketreplytext'] . '</textarea><br />Variables: {ticketid}, {replyid}, {admin}, {departmentid}, {department}, {subject}, {message}, {priority}, {status}</td></tr>';
+			echo '> غيرفعال<br />If enabled, client will be texted when admin replies to his/her support ticket.<br /><textarea dir=\'rtl\' name=\'ticketreplytext\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketreplytext'] . '</textarea><br />متغیر ها: {ticketid}, {replyid}, {admin}, {departmentid}, {department}, {subject}, {message}, {priority}, {status}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان ایجاد سرویس:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'modulecreate\' value=\'1\'';
 			if ($row_mod['modulecreate'] == 1)
@@ -584,7 +604,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'modulecreatetext\' cols=\'70\' rows=\'1\'>' . $row_mod['modulecreatetext'] . '</textarea><br />Variables: {domain}, {username}, {password}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'modulecreatetext\' cols=\'70\' rows=\'1\'>' . $row_mod['modulecreatetext'] . '</textarea><br />متغیر ها: {domain}, {username}, {password}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان بسته شدن سرویس:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'modulesuspend\' value=\'1\'';
 			if ($row_mod['modulesuspend'] == 1)
@@ -596,9 +616,9 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'modulesuspendtext\' cols=\'70\' rows=\'1\'>' . $row_mod['modulesuspendtext'] . '</textarea><br />Variables: {domain}, {username}, {password}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'modulesuspendtext\' cols=\'70\' rows=\'1\'>' . $row_mod['modulesuspendtext'] . '</textarea><br />متغیر ها: {domain}, {username}, {password}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>قبل از انقضای سرويس(Daily Cron):</td>';
-			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'text\' name=\'domainxdays\' value=\'' . $row_mod['domainxdays'] . '\' style=\'width:30px\'> days before, set 0 to disable<br /><textarea dir=\'rtl\' name=\'domainxdaystext\' cols=\'70\' rows=\'1\'>' . $row_mod['domainxdaystext'] . '</textarea><br />Variables: {domain}, {remainingdays}, {expirydate}</td></tr>';
+			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'text\' name=\'domainxdays\' value=\'' . $row_mod['domainxdays'] . '\' style=\'width:30px\'> days before, set 0 to disable<br /><textarea dir=\'rtl\' name=\'domainxdaystext\' cols=\'70\' rows=\'1\'>' . $row_mod['domainxdaystext'] . '</textarea><br />متغیر ها: {domain}, {remainingdays}, {expirydate}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;\'>در زمان انقضای سفارش(Daily Cron):</td>';
 			echo '<td style=\'border-top:1px solid black;\'><input type=\'radio\' name=\'dueinvoice\' value=\'1\'';
 			if ($row_mod['dueinvoice'] == 1)
@@ -610,7 +630,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'dueinvoicetext\' cols=\'70\' rows=\'1\'>' . $row_mod['dueinvoicetext'] . '</textarea><br />Variables: {amount}, {duedate}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'dueinvoicetext\' cols=\'70\' rows=\'1\'>' . $row_mod['dueinvoicetext'] . '</textarea><br />متغیر ها: {amount}, {duedate}</td></tr>';
 			echo '<tr><td colspan=\'2\'><b><u>ارسال پیامک به مدیریت:</u></b></td></tr>';
 			echo '<tr><td style=\'border-bottom:1px solid black;\'>هنگام ارسال سفارش جدید:</td>';
 			echo '<td style=\'border-bottom:1px solid black;\'><input type=\'radio\' name=\'ordersadmin\' value=\'1\'';
@@ -623,7 +643,41 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ordertextadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ordertextadmin'] . '</textarea><br />Variables: {amount}, {duedate}, {orderid}, {ordernumber}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ordertextadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ordertextadmin'] . '</textarea><br />متغیر ها: {amount}, {duedate}, {orderid}, {ordernumber}</td></tr>';
+			//start
+			
+			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان ثبت نام کاربر:</td>';
+			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'clientaddadmin\' value=\'1\'';
+			if ($row_mod['clientaddadmin'] == 1)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> فعال <input type=\'radio\' name=\'clientaddadmin\' value=\'0\'';
+			if ($row_mod['clientaddadmin'] == 0)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'clientaddtxtadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['clientaddtxtadmin'] . '</textarea><br />متغیر ها:{firstname}, {lastname}</td></tr>';
+			
+			
+			//end
+			//start
+			
+			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>در زمان پرداخت فاکتور:</td>';
+			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'payadmin\' value=\'1\'';
+			if ($row_mod['payadmin'] == 1)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> فعال <input type=\'radio\' name=\'payadmin\' value=\'0\'';
+			if ($row_mod['payadmin'] == 0)
+			{
+				echo ' checked=\'checked\'';
+			}
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'adminpaytxtclient\' cols=\'70\' rows=\'1\'>' . $row_mod['adminpaytxtclient'] . '</textarea><br />متغیر ها:{firstname}, {lastname}, {invoiceid}, {amount}</td></tr>';
+			
+			
+			//end
 			echo '<tr><td style=\'border-top:1px solid black;border-bottom:1px solid black;\'>هنگام ارسال تیکت پشتیبانی جدید:</td>';
 			echo '<td style=\'border-top:1px solid black;border-bottom:1px solid black;\'><input type=\'radio\' name=\'newticketadmin\' value=\'1\'';
 			if ($row_mod['newticketadmin'] == 1)
@@ -650,7 +704,7 @@
 			{
 				echo ' checked="checked"';
 			}
-			echo '> کم اهميت<br /><textarea dir=\'rtl\' name=\'ticketopentxtadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketopentxtadmin'] . '</textarea><br />Variables:{ticketid}, {clientname}, {department}, {departmentid}, {subject}, {message}, {priority}</td></tr>';
+			echo '> کم اهميت<br /><textarea dir=\'rtl\' name=\'ticketopentxtadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketopentxtadmin'] . '</textarea><br />متغیر ها:{ticketid}, {clientname}, {department}, {departmentid}, {subject}, {message}, {priority}</td></tr>';
 			echo '<tr><td style=\'border-top:1px solid black;\'>هنگام پاسخ دادن به تیکت پشتیبانی:</td>';
 			echo '<td style=\'border-top:1px solid black;\'><input type=\'radio\' name=\'ticketreplyadmin\' value=\'1\'';
 			if ($row_mod['ticketreplyadmin'] == 1)
@@ -662,7 +716,7 @@
 			{
 				echo ' checked=\'checked\'';
 			}
-			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ticketreplytextadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketreplytextadmin'] . '</textarea><br />Variables: {ticketid}, {replyid}, {userid}, {clientname}, {departmentid}, {department}, {subject}, {message}, {priority}, {status}</td></tr>';
+			echo '> غيرفعال<br /><textarea dir=\'rtl\' name=\'ticketreplytextadmin\' cols=\'70\' rows=\'1\'>' . $row_mod['ticketreplytextadmin'] . '</textarea><br />متغیر ها: {ticketid}, {replyid}, {userid}, {clientname}, {departmentid}, {department}, {subject}, {message}, {priority}, {status}</td></tr>';
 			echo '<tr><td colspan=\'2\'><b><u>تنظیمات عمومی:</u></b></td></tr>';
 			echo '<tr><td>امضا:</td>';
 			echo '<td><textarea dir=\'rtl\' name=\'businessname\' cols=\'70\' rows=\'1\'>' . $row_mod['businessname'] . '</textarea><br />این متن به آخر تمامی متن پیامک های ارسال شده افزوده می شود.</td></tr>';
@@ -689,7 +743,7 @@
 	}
 	if (isset($_GET['singlesms']))
 	{
-		$mod          = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod          = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod      = @mysql_fetch_assoc($mod);
 		$customers       = @mysql_query('SELECT id, firstname, lastname FROM tblclients ORDER BY firstname, lastname ASC');
 		$row_telfield = mysql_fetch_assoc(@mysql_query('SELECT id FROM tblcustomfields WHERE fieldname=' . @GetSQLValueString($row_mod['mobilenumberfield'], 'text')));
@@ -724,7 +778,7 @@
 		<form method=\'post\' action=\'addonmodules.php?module=sms_addon&SendSingleSms\'>متن پيامک:<br /><textarea name=\'content\' style=\'width:350px;\' rows=\'10\'></textarea><br />دريافت کننده:<br /> <select name=\'customer\'><option value="none">کاربر مورد نظر</option>';
 		while ($row_customers = mysql_fetch_assoc($customers))
 		{
-			$mod2      = @mysql_query('SELECT * FROM mod_smsaddon');
+			$mod2      = @mysql_query('SELECT * FROM mod_smsaddon5');
 			$row_mod2  = @mysql_fetch_assoc($mod2);
 			$telu      = '';
 			$row_telno = mysql_fetch_assoc(@mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_telfield['id'] . '\' AND relid=\'' . $row_customers['id'] . '\''));
@@ -750,16 +804,21 @@
 	
 	if (isset($_GET['masssms']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 
 		$customers        = @mysql_query('SELECT count(id) FROM tblclients');
 		$row_customers    = @mysql_fetch_assoc($customers);
 		$totalRows_mod = @mysql_num_rows($mod);
 		
-		$sms_client = new SoapClient('http://www.novinpayamak.com/WebService/?wsdl', array('encoding'=>'UTF-8'));
-		$credit = $sms_client->CreditCheck(array('gateway_number' => $row_mod['username'], 'gateway_pass' => $row_mod['password']));
+		$parameters['username'] = $row_mod['username'];
+		$parameters['password'] = $row_mod['password'];
 		
+		$client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
+		
+		$credit = $client->CheckCredit(array(
+				'Auth' => array('number' => $row_mod['number'],'pass' => $row_mod['password'])))->Credit;
+				
 		if ($credit < 0)
 		{
 			$error  = 1;
@@ -812,7 +871,7 @@
 	
 	if (isset($_GET['logs']))
 	{
-		$mod     = @mysql_query('SELECT * FROM mod_smsaddon');
+		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
 
 		$maxRows_log = $row_mod['logsperpage'];
@@ -824,7 +883,7 @@
 		}
 		
 		$startRow_log    = $pageNum_log * $maxRows_log;
-		$query_log       = 'SELECT * FROM mod_smsaddon_logs ORDER BY id DESC';
+		$query_log       = 'SELECT * FROM mod_smsaddon5_logs ORDER BY id DESC';
 		$query_limit_log = sprintf('%s LIMIT %d, %d', $query_log, $startRow_log, $maxRows_log);
 		
 		if (!($log = @mysql_query($query_limit_log)))
@@ -950,23 +1009,26 @@
 		return 1;
 	}
 	
-	$mod           = @mysql_query('SELECT * FROM mod_smsaddon');
+	$mod           = @mysql_query('SELECT * FROM mod_smsaddon5');
 	$row_mod       = @mysql_fetch_assoc($mod);
 	if ($row_mod)
 	{
-		$sms_client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
-		$credit = $sms_client->CheckCredit(array(
-			'Auth' => array('number' => $gateway['number'],'pass' => $gateway['pass'])
-		));
+		$parameters['username'] = $row_mod['username'];
+		$parameters['password'] = $row_mod['password'];
 		
-		if ($credit->Status < 0)
+		$client = new SoapClient('http://www.novinpayamak.com/services/SMSBox/wsdl', array('encoding' => 'UTF-8', 'connection_timeout' => 3));
+		
+		$credit = $client->CheckCredit(array(
+				'Auth' => array('number' => $row_mod['number'],'pass' => $row_mod['password'])))->Credit;
+	
+		if ($credit < 0)
 		{
 			$error  = 1;
-			$credit_str = 'خطایی در ارتباط با درگاه رخ داده است. کد خطا: '. $credit->Status;
+			$credit_str = 'خطایی در ارتباط با درگاه رخ داده است. کد خطا: '. $credit;
 		}
 		else
 		{
-			$credit_str = 'اعتبار درگاه: ' . $credit->Credit;
+			$credit_str = 'اعتبار درگاه: ' . $credit;
 		}
 		
 		echo '
@@ -1008,7 +1070,7 @@
 		<ul>
 		<li><a href=\'addonmodules.php?module=sms_addon&logs\'>پيامک های ارسالی</a></li>
 		</ul>
-		<center>ماژول ارسال پيامک نسخه 1.0.2 توسط <a href=\'http://www.novinpayamak.com\' target=\'_blank\'>نوين پيامک</a></center>
+		<center>ماژول ارسال پيامک نسخه 1.2.2 توسط <a href="http://www.novinpayamak.com/ target="_blank">نوین پیامک</a></center>
 		</fieldset>
 		';
 		return 1;
