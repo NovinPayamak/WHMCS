@@ -12,7 +12,6 @@
 				'Recipients' => array($message['numbers']),
 				'Message' => array($message['content']),
 				'Flash' => $message['flash']
-<<<<<<< HEAD
 			))->Status;
 		
 	}
@@ -101,10 +100,6 @@
 					mysql_query( 'INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time(  ) . '\', \'' . $item_client['firstname'].$item_client['lastname'] . '\', \'' . $item['value'] . ( '\', \'' . $response . '\', \'' ) . $clientaddtxtclient . $row_mod['businessname'] . '\')' );
 				}
 			}
-=======
-			));
-		}
->>>>>>> origin/master
 
 
 			if ($row_mod['payadmin'] == 1) {
@@ -181,15 +176,9 @@
 						$messag['numbers'] = $row_teli['value'];
 						$messag['content'] = $passwordchangetxt . $row_mod['businessname'];
 
-<<<<<<< HEAD
 						$response = SendS($gatewa, $messag);
 
 						mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_teli['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
-=======
-						$responseA = SendSMS($gateway, $message);
-						$response = $responseA->Status;
-						mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $passwordchangetxt . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 					}
 				}
 				else
@@ -272,15 +261,9 @@
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $ticketopentxtclient;
 
-<<<<<<< HEAD
 								$response = SendS($gateway, $message);
 								
 								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
-=======
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $vars['userid'] . '\', \'' . $row_tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketopentxtclient) . '\')');
->>>>>>> origin/master
 							}
 						}
 						if ($row_mod['newticketadmin'] == 1)
@@ -422,16 +405,9 @@
 				$message['numbers'] = $row_mod['adminmobile'];
 				$message['content'] = $ticketreplytextadmin;
 
-<<<<<<< HEAD
 				$response = SendS($gateway, $message);
 				
 				mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytextadmin) . '\')');
-=======
-				$responseA = SendSMS($gateway, $message);
-				$response = $responseA->Status;
-				
-				mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'admin\', \'' . $row_mod['adminmobile'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $ticketreplytextadmin) . '\')');
->>>>>>> origin/master
 			}
 		}
 		return true;
@@ -657,7 +633,6 @@
 	
 	function daily_cron_job()
 	{
-<<<<<<< HEAD
 		
 		$mod     = @mysql_query('SELECT * FROM mod_smsaddon5');
 		$row_mod = @mysql_fetch_assoc($mod);
@@ -681,220 +656,92 @@
 				$row_report            = @mysql_fetch_assoc($report);
 
 				if ($row_tel['id'] != '' && $row_report['id'] != '')
-=======
-		$row_mod = @mysql_fetch_assoc(mysql_query('SELECT * FROM mod_smsaddon'));
-		if ($row_mod)
-		{
-			if ($row_mod['new_bill'] == 1)
-			{
-				$daysbefore         = mysql_query('SELECT value FROM tblconfiguration WHERE setting=\'CreateInvoiceDaysBefore\'');
-				$row_daysbefore     = mysql_fetch_assoc($daysbefore);
-				$begin              = time();
-				$end               	= date('Y-m-d', ($row_daysbefore['value'] * 86400) + $begin );
-				$bill           	= @mysql_query('SELECT userid, amount, nextduedate FROM tblhosting WHERE nextduedate=\'' . $end . '\' AND domainstatus=\'Active\'');
-				$dateformat         = @mysql_query('SELECT value FROM tblconfiguration WHERE setting=\'DateFormat\'');
-				$row_dateformat     = @mysql_fetch_assoc($dateformat);
-				$tel_field          = @mysql_fetch_assoc(mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['mobilenumberfield'], 'text'))));
-				$row_report         = @mysql_fetch_assoc(mysql_query(@sprintf('SELECT id FROM tblcustomfields WHERE fieldname=%s', @GetSQLValueString($row_mod['notificationfield'], 'text'))));
-				if ($tel_field['id'] != '' && $row_report['id'] != '')
->>>>>>> origin/master
 				{
-					while ($row_bill = mysql_fetch_assoc($bill))
+					if ($totalRows_bill > 0)
 					{
-						$date       = explode('-', $row_bill['nextduedate']);
-						$history    = str_replace(array('YYYY', 'MM', 'DD'), array($date[0], $date[1], $date[2]), $row_dateformat['value']);
-						
-						$invoicetextclient = str_replace(array('{amount}', '{duedate}'), array($row_bill['amount'], $history), $row_mod['invoicetextclient']);
-
-						$tel    	= @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $tel_field['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\''));
-
-						$row_reportal    = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\''));
-						if ($tel['value'] == '')
+						while ($row_bill = mysql_fetch_assoc($bill))
 						{
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-							$error = 1;
-						}
-						if ($error != 1)
-						{
-							$tel['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $tel['value']);
-							
-							if($tel['value'][0] != '0') $tel['value'] = '0'. $tel['value'];
-						}
-						if ($error != 1)
-						{
-							if ($row_reportal['value'] == $row_mod['no_area'])
-							{
-								$error  = 1;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-							}
-						}
-						if ($error != 1)
-						{
-							$gateway['number']  = $row_mod['username'];
-							$gateway['pass']    = $row_mod['password'];
-							$message['numbers'] = $tel['value'];
-							$message['content'] = $invoicetextclient . $row_mod['businessname'];
-
-							$responseA = SendSMS($gateway, $message);
-							$response = $responseA->Status;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-						}
-					}
-					
-					$domainler           = @mysql_query('SELECT userid, recurringamount, nextduedate FROM tbldomains WHERE status=\'Active\' AND nextduedate=\'' . $today3 . '\'');
-					while ($row_domainler = mysql_fetch_assoc($domainler))
-					{
-						$date            = explode('-', $row_domainler['nextduedate']);
-						$history         = str_replace(array('YYYY', 'MM', 'DD'), array($date[0], $date[1], $date[2]), $row_dateformat['value']);
-						$invoicetextclient = str_replace(array('{amount}', '{duedate}'), array($row_domainler['recurringamount'], $history), $row_mod['invoicetextclient']);
-						$tel        = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $tel_field['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\''));
-
-						$reportal        = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\'');
-						$row_reportal    = @mysql_fetch_assoc($reportal);
-						if ($tel['value'] == '')
-						{
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-							$error = 1;
-						}
-						if ($error != 1)
-						{
-							$tel['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $tel['value']);
-							
-							if($tel['value'][0] != '0') $tel['value'] = '0'.$tel['value'];
-						}
-						if ($error != 1)
-						{
-							if ($row_reportal['value'] == $row_mod['no_area'])
-							{
-								$error  = 1;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-							}
-						}
-						if ($error != 1)
-						{
-							$gateway['number']  = $row_mod['username'];
-							$gateway['pass']    = $row_mod['password'];
-							$message['numbers'] = $tel['value'];
-							$message['content'] = $invoicetextclient . $row_mod['businessname'];
-
-							$responseA = SendSMS($gateway, $message);
-							$response = $responseA->Status;
-							mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-						}
-					}
-					
-					if ($row_mod['domainxdays'] > 0)
-					{
-						$begin               = time();
-						$end            	 = date('Y-m-d', ($row_mod['domainxdays'] * 86400) + $begin);
-						$domainler           = @mysql_query('SELECT userid, domain, recurringamount, expirydate, nextduedate FROM tbldomains WHERE expirydate=\'' . $end . '\' AND status=\'Active\'');
-						while ($row_domainler = mysql_fetch_assoc($domainler))
-						{
-							$date              = explode('-', $row_domainler['expirydate']);
-							$history           = str_replace(array('YYYY', 'MM', 'DD'), array($date[0], $date[1], $date[2]), $row_dateformat['value']);
-							$invoicetextclient = str_replace(array('{remainingdays}', '{expirydate}', '{domain}'), array($row_mod['domainxdays'], $history, $row_domainler['domain']), $row_mod['domainxdaystext']);
-
-							$tel    		   = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $tel_field['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\''));
-							$reportal          = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\'');
-							$row_reportal      = @mysql_fetch_assoc($reportal);
+							$date            = explode('-', $row_bill['nextduedate']);
+							$history        = str_replace('YYYY', $date[0], $row_dateformat['value']);
+							$history        = str_replace('MM', $date[1], $history);
+							$history        = str_replace('DD', $date[2], $history);
+							$invoicetextclient = str_replace('{amount}', $row_bill['amount'], $row_mod['invoicetextclient']);
+							$invoicetextclient = str_replace('{duedate}', $history, $invoicetextclient);
+							$tel    = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_tel['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\''));
+							$reportal        = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\'');
+							$row_reportal    = @mysql_fetch_assoc($reportal);
 							if ($tel['value'] == '')
 							{
-<<<<<<< HEAD
 								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-=======
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 								$error = 1;
 							}
 							if ($error != 1)
 							{
 								$tel['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $tel['value']);
 								
-								if($tel['value'][0] != '0') $tel['value'] = '0'. $tel['value'];
+								if($tel['value'][0] != '0') $tel['value'] = '0'.$tel['value'];
 							}
 							if ($error != 1)
 							{
 								if ($row_reportal['value'] == $row_mod['no_area'])
 								{
 									$error  = 1;
-<<<<<<< HEAD
 									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-=======
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 								}
 							}
 							if ($error != 1)
 							{
 								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
-<<<<<<< HEAD
 								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $tel['value'];
 								$message['content'] = $invoicetextclient . $row_mod['businessname'];
 
 								$response = SendS($gateway, $message);
 								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-=======
-								$message['numbers'] = $tel['value'];
-								$message['content'] = $invoicetextclient . $row_mod['businessname'];
-
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 							}
 						}
 					}
 					
-					if ($row_mod['dueinvoice'] == 1)
+					$domainler           = @mysql_query('SELECT userid, recurringamount, nextduedate FROM tbldomains WHERE status=\'Active\' AND nextduedate=\'' . $today3 . '\'');
+					$totalRows_domainler = @mysql_num_rows($domainler);
+					if ($totalRows_domainler > 0)
 					{
-						$begin          = time();
-						$end    	    = date('Y-m-d', $begin - 86400);
-						$bill           = @mysql_query('SELECT userid, total, duedate FROM tblinvoices WHERE duedate=\'' . $end . '\' AND status=\'Unpaid\'');
-						
-						while ($row_bill = mysql_fetch_assoc($bill))
+						while ($row_domainler = mysql_fetch_assoc($domainler))
 						{
-							$date            = explode('-', $row_bill['duedate']);
-							$history        = str_replace(array('YYYY', 'MM', 'DD'), array($date[0], $date[1], $date[2]), $row_dateformat['value']);
-							$invoicetextclient = str_replace(array('{amount}', '{duedate}'), array($row_bill['total'], $history), $row_mod['dueinvoicetext']);
-
-							$tel    = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $tel_field['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\''));
-							$row_reportal    = @mysql_fetch_assoc(mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_bill['userid'] . '\''));
-							
-							if ($tel['value'] == '')
+							$date            = explode('-', $row_domainler['nextduedate']);
+							$history        = str_replace('YYYY', $date[0], $row_dateformat['value']);
+							$history        = str_replace('MM', $date[1], $history);
+							$history        = str_replace('DD', $date[2], $history);
+							$invoicetextclient = str_replace('{amount}', $row_domainler['recurringamount'], $row_mod['invoicetextclient']);
+							$invoicetextclient = str_replace('{duedate}', $history, $invoicetextclient);
+							$tel        = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_tel['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\'');
+							$row_tel    = @mysql_fetch_assoc($tel);
+							$reportal        = @mysql_query('SELECT value FROM tblcustomfieldsvalues WHERE fieldid=\'' . $row_report['id'] . '\' AND relid=\'' . $row_domainler['userid'] . '\'');
+							$row_reportal    = @mysql_fetch_assoc($reportal);
+							if ($row_tel['value'] == '')
 							{
-<<<<<<< HEAD
 								mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-=======
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'\', \'Empty mobile number\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 								$error = 1;
 							}
 							if ($error != 1)
 							{
-								$tel['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $tel['value']);
+								$row_tel['value'] = str_replace(array(' ', '-', '(', ')', ''), '', $row_tel['value']);
 								
-								if($tel['value'][0] != '0') $tel['value'] = '0'. $tel['value'];
+								if($row_tel['value'][0] != '0') $row_tel['value'] = '0'.$row_tel['value'];
 							}
 							if ($error != 1)
 							{
 								if ($row_reportal['value'] == $row_mod['no_area'])
 								{
 									$error  = 1;
-<<<<<<< HEAD
 									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_domainler['userid'] . '\', \'' . $row_tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
-=======
-									mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'Client doesn\'t want to receive text messages\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 								}
 							}
 							if ($error != 1)
 							{
 								$gateway['username']  = $row_mod['username'];
 								$gateway['pass']    = $row_mod['password'];
-<<<<<<< HEAD
 								$gateway['number']    = $row_mod['number'];
 								$message['numbers'] = $row_tel['value'];
 								$message['content'] = $invoicetextclient . $row_mod['businessname'];
@@ -1015,14 +862,6 @@
 									$response = SendS($gateway, $message);
 									mysql_query('INSERT INTO mod_smsaddon5_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
 								}
-=======
-								$message['numbers'] = $tel['value'];
-								$message['content'] = $invoicetextclient . $row_mod['businessname'];
-
-								$responseA = SendSMS($gateway, $message);
-								$response = $responseA->Status;
-								mysql_query('INSERT INTO mod_smsaddon_logs(time, client, mobilenumber, result, text) VALUES (\'' . time() . '\', \'' . $row_bill['userid'] . '\', \'' . $tel['value'] . '\', \'' . $response . '\', \'' . str_replace('\'', '\'', $invoicetextclient . $row_mod['businessname']) . '\')');
->>>>>>> origin/master
 							}
 						}
 					}
